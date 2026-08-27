@@ -1,2 +1,8 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AlertaDengue.Api/AlertaDengue.Api.csproj" />
+    <Project Path="src/AlertaDengue.Application/AlertaDengue.Application.csproj" />
+    <Project Path="src/AlertaDengue.Domain/AlertaDengue.Domain.csproj" />
+    <Project Path="src/AlertaDengue.Infrastructure/AlertaDengue.Infrastructure.csproj" />
+  </Folder>
 </Solution>

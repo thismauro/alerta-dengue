@@ -17,4 +17,9 @@
     <Folder Include="Controllers\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AlertaDengue.Application\AlertaDengue.Application.csproj" />
+    <ProjectReference Include="..\AlertaDengue.Infrastructure\AlertaDengue.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
