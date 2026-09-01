@@ -1,6 +1,15 @@
 using System.Text.Json;
+using AlertaDengue.Application.Interfaces;
+using AlertaDengue.Application.Services;
+using AlertaDengue.Domain.Interfaces;
+using AlertaDengue.Infrastructure.Data;
+using AlertaDengue.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddScoped<Database>();
+builder.Services.AddScoped<IAlertaRepository, AlertaRepository>();
+builder.Services.AddScoped<IAlertaService, AlertaService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
