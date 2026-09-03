@@ -1,112 +1,68 @@
+using System.Data;
+using AlertaDengue.Application.Interfaces;
 using AlertaDengue.Domain.Entities;
-using AlertaDengue.Domain.Interfaces;
-using AlertaDengue.Infrastructure.Data;
+using AlertaDengue.Domain.ValueObjects;
+using AlertaDengue.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
-using System;
-using System.Threading.Tasks;
 
-namespace AlertaDengue.Infrastructure.Repositories
+namespace AlertaDengue.Infrastructure.Repositories;
+
+public sealed class AlertaRepository : IAlertaRepository
 {
-    public class AlertaRepository : IAlertaRepository
+    private readonly ISqlConnectionFactory _connectionFactory;
+
+    public AlertaRepository(ISqlConnectionFactory connectionFactory)
+        => _connectionFactory = connectionFactory;
+
+    public async Task<Alerta?> ObterPorSemanaAsync(
+        SemanaEpidemiologica semana,
+        CancellationToken cancellationToken)
     {
-        private readonly Database _database;
+        await using var conexao = await _connectionFactory.CriarConexaoAbertaAsync(cancellationToken);
+        await using var comando = new SqlCommand(AlertaQueries.ObterPorSemana, conexao);
 
-        public AlertaRepository(Database database)
+        comando.Parameters.Add("@ano", SqlDbType.Int).Value = semana.Ano;
+        comando.Parameters.Add("@semana", SqlDbType.Int).Value = semana.Numero;
+
+        await using var reader = await comando.ExecuteReaderAsync(cancellationToken);
+
+        return await reader.ReadAsync(cancellationToken)
+            ? AlertaMapper.Mapear(reader)
+            : null;
+    }
+
+    public async Task<int> SalvarAsync(
+        IEnumerable<Alerta> alertas,
+        CancellationToken cancellationToken)
+    {
+        await using var conexao = await _connectionFactory.CriarConexaoAbertaAsync(cancellationToken);
+        await using var transacao = (SqlTransaction)await conexao.BeginTransactionAsync(cancellationToken);
+
+        try
         {
-            _database = database;
-        }
+            var afetados = 0;
 
-        public async Task<Alerta> GetBySemanaAsync(int ano, int semana)
-        {
-            using var connection = _database.GetConnection();
-            var command = new SqlCommand(
-                "SELECT * FROM alertas WHERE ano = @ano AND semana = @semana",
-                connection
-            );
-            command.Parameters.AddWithValue("@ano", ano);
-            command.Parameters.AddWithValue("@semana", semana);
-
-            await connection.OpenAsync();
-            using var reader = await command.ExecuteReaderAsync();
-
-            if (await reader.ReadAsync())
+            foreach (var alerta in alertas)
             {
-                return new Alerta
-                {
-                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                    Ano = reader.GetInt32(reader.GetOrdinal("ano")),
-                    Semana = reader.GetInt32(reader.GetOrdinal("semana")),
-                    SemanaEpidemiologica = reader.GetString(reader.GetOrdinal("semana_epidemiologica")),
-                    CasosEstimados = reader.GetInt32(reader.GetOrdinal("casos_estimados")),
-                    CasosNotificados = reader.GetInt32(reader.GetOrdinal("casos_notificados")),
-                    NivelAlerta = reader.GetInt32(reader.GetOrdinal("nivel_alerta")),
-                    DataRegistro = reader.GetDateTime(reader.GetOrdinal("data_registro"))
-                };
+                await using var comando = new SqlCommand(AlertaQueries.Upsert, conexao, transacao);
+
+                comando.Parameters.Add("@ano", SqlDbType.Int).Value = alerta.Semana.Ano;
+                comando.Parameters.Add("@semana", SqlDbType.Int).Value = alerta.Semana.Numero;
+                comando.Parameters.Add("@casosEstimados", SqlDbType.Decimal).Value = alerta.CasosEstimados;
+                comando.Parameters.Add("@casosNotificados", SqlDbType.Int).Value = alerta.CasosNotificados;
+                comando.Parameters.Add("@nivelAlerta", SqlDbType.Int).Value = (int)alerta.Nivel;
+                comando.Parameters.Add("@dataRegistroUtc", SqlDbType.DateTime2).Value = alerta.DataRegistroUtc;
+
+                afetados += await comando.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            return null;
+            await transacao.CommitAsync(cancellationToken);
+            return afetados;
         }
-
-        public async Task<int> UpsertAsync(Alerta alerta)
+        catch
         {
-            using var connection = _database.GetConnection();
-
-            var exists = await ExistsAsync(alerta.Ano, alerta.Semana);
-
-            if (exists)
-            {
-                var command = new SqlCommand(
-                    @"UPDATE alertas SET 
-                        casos_estimados = @casosEstimados,
-                        casos_notificados = @casosNotificados,
-                        nivel_alerta = @nivelAlerta
-                      WHERE ano = @ano AND semana = @semana",
-                    connection
-                );
-                command.Parameters.AddWithValue("@casosEstimados", alerta.CasosEstimados);
-                command.Parameters.AddWithValue("@casosNotificados", alerta.CasosNotificados);
-                command.Parameters.AddWithValue("@nivelAlerta", alerta.NivelAlerta);
-                command.Parameters.AddWithValue("@ano", alerta.Ano);
-                command.Parameters.AddWithValue("@semana", alerta.Semana);
-
-                await connection.OpenAsync();
-                return await command.ExecuteNonQueryAsync();
-            }
-            else
-            {
-                var command = new SqlCommand(
-                    @"INSERT INTO alertas 
-                        (ano, semana, semana_epidemiologica, casos_estimados, casos_notificados, nivel_alerta, data_registro) 
-                      VALUES 
-                        (@ano, @semana, @semanaEpidemiologica, @casosEstimados, @casosNotificados, @nivelAlerta, @dataRegistro)",
-                    connection
-                );
-                command.Parameters.AddWithValue("@ano", alerta.Ano);
-                command.Parameters.AddWithValue("@semana", alerta.Semana);
-                command.Parameters.AddWithValue("@semanaEpidemiologica", alerta.SemanaEpidemiologica);
-                command.Parameters.AddWithValue("@casosEstimados", alerta.CasosEstimados);
-                command.Parameters.AddWithValue("@casosNotificados", alerta.CasosNotificados);
-                command.Parameters.AddWithValue("@nivelAlerta", alerta.NivelAlerta);
-                command.Parameters.AddWithValue("@dataRegistro", alerta.DataRegistro);
-
-                await connection.OpenAsync();
-                return await command.ExecuteNonQueryAsync();
-            }
-        }
-
-        private async Task<bool> ExistsAsync(int ano, int semana)
-        {
-            using var connection = _database.GetConnection();
-            var command = new SqlCommand(
-                "SELECT COUNT(1) FROM alertas WHERE ano = @ano AND semana = @semana",
-                connection
-            );
-            command.Parameters.AddWithValue("@ano", ano);
-            command.Parameters.AddWithValue("@semana", semana);
-
-            await connection.OpenAsync();
-            var count = Convert.ToInt32(await command.ExecuteScalarAsync());
-            return count > 0;
+            await transacao.RollbackAsync(cancellationToken);
+            throw;
         }
     }
 }

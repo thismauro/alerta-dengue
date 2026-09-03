@@ -1,94 +1,115 @@
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
+using System.Globalization;
 using System.Text.Json;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
+using AlertaDengue.Application.Exceptions;
+using AlertaDengue.Application.Interfaces;
 using AlertaDengue.Domain.Entities;
+using AlertaDengue.Domain.Enums;
+using AlertaDengue.Domain.ValueObjects;
+using AlertaDengue.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AlertaDengue.Infrastructure.HttpClients;
 
-public class AlertaDengueHttpClient
+public sealed class AlertaDengueHttpClient : IAlertaDengueHttpClient
 {
+    private static readonly JsonSerializerOptions OpcoesJson = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString
+    };
+
     private readonly HttpClient _httpClient;
+    private readonly AlertaDengueOptions _options;
     private readonly ILogger<AlertaDengueHttpClient> _logger;
 
-    public AlertaDengueHttpClient(HttpClient httpClient, ILogger<AlertaDengueHttpClient> logger)
+    public AlertaDengueHttpClient(
+        HttpClient httpClient,
+        IOptions<AlertaDengueOptions> options,
+        ILogger<AlertaDengueHttpClient> logger)
     {
         _httpClient = httpClient;
+        _options = options.Value;
         _logger = logger;
     }
 
-    public async Task<IEnumerable<Alerta>> ConsultarDadosAsync(int ano, int semanaInicio, int semanaFim)
+    public async Task<IReadOnlyList<Alerta>> ConsultarAsync(
+        SemanaEpidemiologica inicio,
+        SemanaEpidemiologica fim,
+        CancellationToken cancellationToken)
     {
-        var geocode = "3106200";
-        var disease = "dengue";
-        var format = "json";
+        var rota = MontarRota(inicio, fim);
 
-        var url = $"https://info.dengue.mat.br/api/alertcity?geocode={geocode}&disease={disease}&format={format}&ew_start={semanaInicio}&ew_end={semanaFim}&ey_start={ano}&ey_end={ano}";
+        _logger.LogInformation(
+            "Consultando alertas de {Inicio} a {Fim} para o município {Geocode}.",
+            inicio, fim, _options.Geocode);
 
         try
         {
-            _logger.LogInformation("Consultando API AlertaDengue: {Url}", url);
-            
-            var response = await _httpClient.GetAsync(url);
-            response.EnsureSuccessStatusCode();
+            using var resposta = await _httpClient.GetAsync(rota, cancellationToken);
+            resposta.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync();
-            
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-            
-            var dados = JsonSerializer.Deserialize<List<DadosApiExterna>>(json, options);
+            await using var conteudo = await resposta.Content.ReadAsStreamAsync(cancellationToken);
 
-            if (dados == null || dados.Count == 0)
+            var registros = await JsonSerializer.DeserializeAsync<List<AlertaDengueApiResponse>>(
+                conteudo, OpcoesJson, cancellationToken);
+
+            if (registros is null || registros.Count == 0)
             {
-                _logger.LogWarning("Nenhum dado retornado pela API");
-                return new List<Alerta>();
+                _logger.LogWarning("A API não retornou registros para o intervalo consultado.");
+                return [];
             }
 
-            var alertas = new List<Alerta>();
-            foreach (var item in dados)
-            {
-                alertas.Add(new Alerta
-                {
-                    Ano = item.SE / 100,
-                    Semana = item.SE % 100,
-                    SemanaEpidemiologica = $"{item.SE / 100}-{item.SE % 100:D2}",
-                    CasosEstimados = item.casos_est,
-                    CasosNotificados = item.casos,
-                    NivelAlerta = item.nivel,
-                    DataRegistro = DateTime.Now
-                });
-            }
+            var alertas = registros.Select(Converter).ToList();
 
-            _logger.LogInformation("Dados obtidos com sucesso: {Count} registros", alertas.Count);
+            _logger.LogInformation("{Quantidade} registros obtidos da API.", alertas.Count);
             return alertas;
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException excecao)
         {
-            _logger.LogError(ex, "Erro de rede ao consultar API AlertaDengue");
-            throw new Exception("Falha na comunicação com a API externa.", ex);
+            _logger.LogError(excecao, "Falha de comunicação com a API AlertaDengue.");
+            throw new ApiExternaIndisponivelException(
+                "Não foi possível comunicar com a API AlertaDengue.", excecao);
         }
-        catch (JsonException ex)
+        catch (TaskCanceledException excecao) when (!cancellationToken.IsCancellationRequested)
         {
-            _logger.LogError(ex, "Erro ao desserializar resposta da API");
-            throw new Exception("Resposta da API em formato inválido.", ex);
+            _logger.LogError(excecao, "Tempo limite excedido ao consultar a API AlertaDengue.");
+            throw new ApiExternaIndisponivelException(
+                "A API AlertaDengue não respondeu dentro do tempo limite.", excecao);
         }
-        catch (Exception ex)
+        catch (JsonException excecao)
         {
-            _logger.LogError(ex, "Erro inesperado ao consultar API AlertaDengue");
-            throw;
+            _logger.LogError(excecao, "Resposta da API em formato inesperado.");
+            throw new ApiExternaIndisponivelException(
+                "A API AlertaDengue retornou dados em formato inesperado.", excecao);
         }
     }
 
-    private class DadosApiExterna
+    private string MontarRota(SemanaEpidemiologica inicio, SemanaEpidemiologica fim)
+        => string.Create(CultureInfo.InvariantCulture,
+            $"/api/alertcity?geocode={_options.Geocode}&disease={_options.Doenca}&format=json" +
+            $"&ew_start={inicio.Numero}&ew_end={fim.Numero}" +
+            $"&ey_start={inicio.Ano}&ey_end={fim.Ano}");
+
+    private static Alerta Converter(AlertaDengueApiResponse registro) => new(
+        semana: SemanaEpidemiologica.DeCodigo(registro.SE),
+        casosEstimados: registro.CasosEstimados,
+        casosNotificados: registro.Casos,
+        nivel: (NivelAlerta)registro.Nivel);
+
+    private sealed class AlertaDengueApiResponse
     {
-        public int SE { get; set; }
-        public int casos_est { get; set; }
-        public int casos { get; set; }
-        public int nivel { get; set; }
+        [JsonPropertyName("SE")]
+        public int SE { get; init; }
+
+        [JsonPropertyName("casos_est")]
+        public decimal CasosEstimados { get; init; }
+
+        [JsonPropertyName("casos")]
+        public int Casos { get; init; }
+
+        [JsonPropertyName("nivel")]
+        public int Nivel { get; init; }
     }
 }
