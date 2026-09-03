@@ -1,17 +1,55 @@
+using AlertaDengue.Domain.Enums;
+using AlertaDengue.Domain.ValueObjects;
+
 namespace AlertaDengue.Domain.Entities;
 
-public class Alerta {
+public class Alerta
+{
+    public int Id { get; private set; }
+    public SemanaEpidemiologica Semana { get; private set; }
 
-  public int Id { get; set; }
-  public int Ano { get; set; }
-  public int Semana { get; set; }
-  public string SemanaEpidemiologica { get; set; } = string.Empty;
-  public int CasosEstimados { get; set; }
-  public int CasosNotificados { get; set; }
-  public int NivelAlerta { get; set; }
-  public DateTime DataRegistro { get; set; }
+    public decimal CasosEstimados { get; private set; }
 
-  public bool SemanaValida() => Semana >= 1 && Semana <= 53;
-  public bool NivelValido() => NivelAlerta >= 1 && NivelAlerta <= 3;
-  public bool AnoValido() => Ano >= 2000 && Ano <= DateTime.Now.Year + 1;
+    public int CasosNotificados { get; private set; }
+
+    public NivelAlerta Nivel { get; private set; }
+    public DateTime DataRegistroUtc { get; private set; }
+
+    public Alerta(
+        SemanaEpidemiologica semana,
+        decimal casosEstimados,
+        int casosNotificados,
+        NivelAlerta nivel)
+    {
+        if (casosEstimados < 0)
+            throw new ArgumentOutOfRangeException(nameof(casosEstimados),
+                "Os números de casos estimados não podem ser negativos.");
+
+        if (casosNotificados < 0)
+            throw new ArgumentOutOfRangeException(nameof(casosNotificados),
+                "Os números de casos notificados não podem ser negativos.");
+
+        if (!Enum.IsDefined(nivel))
+            throw new ArgumentOutOfRangeException(nameof(nivel),
+                $"O nível de alerta informado não foi encontrado: {(int)nivel}");
+
+        Semana = semana;
+        CasosEstimados = casosEstimados;
+        CasosNotificados = casosNotificados;
+        Nivel = nivel;
+        DataRegistroUtc = DateTime.UtcNow;
+    }
+
+    public static Alerta Reconstituir(
+        int id,
+        SemanaEpidemiologica semana,
+        decimal casosEstimados,
+        int casosNotificados,
+        NivelAlerta nivel,
+        DateTime dataRegistroUtc)
+        => new(semana, casosEstimados, casosNotificados, nivel)
+        {
+            Id = id,
+            DataRegistroUtc = dataRegistroUtc
+        };
 }
