@@ -1,9 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>385022b2-d691-4e48-aad9-46c1f5b2309c</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AlertaDengue.Application\AlertaDengue.Application.csproj" />
     <ProjectReference Include="..\AlertaDengue.Infrastructure\AlertaDengue.Infrastructure.csproj" />
+    <ProjectReference Include="..\AlertaDengue.Domain\AlertaDengue.Domain.csproj" />
   </ItemGroup>
 
 </Project>
