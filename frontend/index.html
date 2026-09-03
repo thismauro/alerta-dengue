@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerta Dengue — Belo Horizonte</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header class="cabecalho">
+        <div class="conteudo">
+            <h1>Alerta Dengue</h1>
+            <p class="subtitulo">Belo Horizonte &middot; últimas três semanas epidemiológicas</p>
+        </div>
+    </header>
+
+    <main class="conteudo">
+        <div id="estado-carregando" class="aviso">
+            <span class="spinner" aria-hidden="true"></span>
+            Carregando dados...
+        </div>
+
+        <div id="estado-erro" class="aviso aviso--erro" hidden>
+            <strong>Não foi possível carregar os dados.</strong>
+            <p id="mensagem-erro"></p>
+            <button type="button" id="botao-recarregar" class="botao">Tentar novamente</button>
+        </div>
+
+        <section id="cards" class="grade" aria-live="polite"></section>
+    </main>
+
+    <footer class="rodape conteudo">
+        <p>Fonte: <a href="https://info.dengue.mat.br" target="_blank" rel="noopener">InfoDengue</a></p>
+    </footer>
+
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
