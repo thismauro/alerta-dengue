@@ -2,45 +2,39 @@
 # BACKEND (.NET)
 # ===================
 
-# Connection strings com credenciais
+# Configurações locais e de produção
 appsettings.Production.json
 appsettings.Local.json
 *.local.json
-secrets.json
 
 # Build outputs
-backend/**/bin/
-backend/**/obj/
-backend/**/out/
-backend/**/publish/
+**/bin/
+**/obj/
+**/out/
+**/publish/
 
-# Visual Studio
+# Visual Studio / VS Code
 .vs/
+.vscode/
 *.user
 *.userprefs
-*.dbmdl
-*.dbproj.schemaview
-*.jfm
+*.code-workspace
 *.pfx
 *.publishsettings
-*.userprefs
-.vscode/
-*.code-workspace
-*.swp
-*.swo
-*~
 
 # SQL Server
 *.mdf
 *.ldf
-*.log
 *.bak
 
 # ===================
-# ARQUIVOS DO SISTEMA
+# SISTEMA
 # ===================
 
 .DS_Store
 Thumbs.db
 *.tmp
 *.log
+*.swp
+*.swo
+*~
