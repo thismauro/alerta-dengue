@@ -45,4 +45,12 @@ public sealed class AlertasController : ControllerBase
 
         return Ok(new { registros_sincronizados = registros });
     }
+
+    [HttpGet("ultimas-semanas")]
+    [ProducesResponseType<IReadOnlyList<SemanaDisponivelDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    public ActionResult<IReadOnlyList<SemanaDisponivelDto>> ListarUltimaSemana(
+        [FromQuery] int quantidade = 3)
+        => Ok(_consulta.ListarUltimasSemanas(quantidade));
+    
 }
