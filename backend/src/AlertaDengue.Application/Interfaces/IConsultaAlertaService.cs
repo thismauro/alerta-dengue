@@ -8,4 +8,6 @@ public interface IConsultaAlertaService
     Task<AlertaSemanalDto> ObterPorSemanaAsync(
         SemanaEpidemiologica semana,
         CancellationToken cancellationToken);
+
+    IReadOnlyList<SemanaDisponivelDto> ListarUltimasSemanas(int quantidade);
 }

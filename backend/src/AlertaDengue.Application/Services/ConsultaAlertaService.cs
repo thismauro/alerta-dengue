@@ -30,4 +30,22 @@ public sealed class ConsultaAlertaService : IConsultaAlertaService
         CasosNotificados = alerta.CasosNotificados,
         NivelAlerta = (int)alerta.Nivel
     };
+
+    public IReadOnlyList<SemanaDisponivelDto> ListarUltimasSemanas(int quantidade)
+{
+    if (quantidade is < 1 or > 52)
+        throw new ArgumentOutOfRangeException(nameof(quantidade),
+            "A quantidade de semanas deve estar entre 1 e 52.");
+
+    var referencia = SemanaEpidemiologica.UltimaFechada(DateOnly.FromDateTime(DateTime.UtcNow.Date));
+
+    return referencia.RetrocederAte(quantidade)
+        .Select(semana => new SemanaDisponivelDto
+        {
+            Ano = semana.Ano,
+            Semana = semana.Numero,
+            SemanaEpidemiologica = semana.ToString()
+        })
+        .ToList();
+    }
 }
